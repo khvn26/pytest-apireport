@@ -1,0 +1,15 @@
+# Environment
+.direnv/
+.envrc
+
+# Packaging
+*.egg-info/
+
+# Caches
+**/__pycache__
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+
+# IDE
+.vscode/
