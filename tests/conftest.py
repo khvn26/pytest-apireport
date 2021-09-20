@@ -48,6 +48,22 @@ def testmodule(testdir) -> Path:
     @given(left=NUMBER, right=NUMBER)
     def test_properties(left, right):
         assert left + right == right + left
+
+
+    @pytest.fixture
+    def error_at_setup():
+        raise RuntimeError
+
+    def test_error_at_setup(error_at_setup):
+        pass
+
+    @pytest.fixture
+    def error_at_teardown():
+        yield
+        raise RuntimeError
+
+    def test_error_at_teardown(error_at_teardown):
+        pass
     """
     )
 
@@ -62,55 +78,32 @@ def expected_tests_ids_and_statuses(
         f"{module_name}.py::test_examples[3.14-5.55]": (2, "SKIPPED"),
         f"{module_name}.py::test_examples[nan-42]": (3, "FAILED"),
         f"{module_name}.py::test_properties": (4, "FAILED"),
+        f"{module_name}.py::test_error_at_setup": (5, "ERROR"),
+        f"{module_name}.py::test_error_at_teardown": (6, "ERROR"),
     }
 
 
 @pytest.fixture
-def test_ids(expected_tests_ids_and_statuses) -> List[int]:
-    return [test_id for (test_id, _) in expected_tests_ids_and_statuses.values()]
-
-
-@pytest.fixture
-def test_report_start_handler(
+def reporting_api(
+    httpserver,
+    expected_headers,
     expected_tests_ids_and_statuses,
-) -> Callable[[Request], Response]:
-    test_ids_by_node_ids = {
-        node_id: test_id
-        for node_id, (test_id, _) in expected_tests_ids_and_statuses.items()
-    }
+):
+    httpserver.expect_oneshot_request(
+        "/runs/", headers=expected_headers, method="POST"
+    ).respond_with_json({"run_id": 11})
 
-    def handler(request: Request):
-        data = request.get_json()
-        assert isinstance(data, dict)
-        assert len(data) == 1
-        node_id = data.get("name")
-        assert node_id, data.get("name")
-        report_id = test_ids_by_node_ids.get(node_id)
-        assert report_id, node_id
-        return Response(json.dumps({"test_id": report_id}))
+    for nodeid, (test_id, test_status) in expected_tests_ids_and_statuses.items():
+        httpserver.expect_oneshot_request(
+            "/tests/", headers=expected_headers, method="POST", json={"name": nodeid}
+        ).respond_with_json({"test_id": test_id})
+        httpserver.expect_oneshot_request(
+            f"/tests/{test_id}/finish/",
+            headers=expected_headers,
+            method="POST",
+            json={"status": test_status},
+        ).respond_with_response(Response(status=204))
 
-    return handler
-
-
-@pytest.fixture
-def test_report_finish_handler_factory(
-    expected_tests_ids_and_statuses,
-) -> Callable[[int], Callable[[Request], Response]]:
-    expected_statuses_by_test_ids = {
-        test_id: expected_status
-        for (test_id, expected_status) in expected_tests_ids_and_statuses.values()
-    }
-
-    def get_handler(test_id: int):
-        def handler(request: Request, test_id: int):
-            expected_status = expected_statuses_by_test_ids.get(test_id)
-            assert expected_status, f"Unexpected request: {request}"
-            data = request.get_json()
-            assert isinstance(data, dict)
-            assert len(data) == 1
-            assert data.get("status") == expected_status, data.get("status")
-            return Response(status=204)
-
-        return partial(handler, test_id=test_id)
-
-    return get_handler
+    httpserver.expect_oneshot_request(
+        "/runs/11/finish/", headers=expected_headers, method="POST"
+    ).respond_with_response(Response(status=204))

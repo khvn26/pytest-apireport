@@ -1,6 +1,7 @@
 # Environment
 .direnv/
 .envrc
+.python-version
 
 # Packaging
 *.egg-info/
@@ -10,6 +11,10 @@
 .pytest_cache/
 .hypothesis/
 .mypy_cache/
+
+# Coverage
+.coverage*
+htmlcov/
 
 # IDE
 .vscode/

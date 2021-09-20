@@ -3,23 +3,24 @@ from typing import TYPE_CHECKING, Dict, Generator, List
 
 import pytest
 from _pytest.config.exceptions import UsageError
+from _pytest.nodes import Item
 
 from pytest_apireport.api import APITestReporter
 from pytest_apireport.types import (
+    TestReporter,
     TestReportEvent,
     TestReportStats,
-    TestReporter,
     TestRunReportEvent,
     TestRunReportStats,
 )
 
 if TYPE_CHECKING:
-    from pytest import Session
-    from _pytest.config import Config, PytestPluginManager
-    from _pytest.config.argparsing import Parser
-    from _pytest.nodes import Item, Node
-    from _pytest.reports import CollectReport, TestReport
-    from _pytest.terminal import TerminalReporter
+    from _pytest.config import Config, PytestPluginManager  # pragma: no cover
+    from _pytest.config.argparsing import Parser  # pragma: no cover
+    from _pytest.nodes import Node  # pragma: no cover
+    from _pytest.reports import TestReport  # pragma: no cover
+    from _pytest.terminal import TerminalReporter  # pragma: no cover
+    from pytest import Session  # pragma: no cover
 
 
 def pytest_addoption(parser: "Parser", pluginmanager: "PytestPluginManager") -> None:
@@ -58,10 +59,8 @@ def pytest_configure(config: "Config") -> None:
     api_test_report_plugin = TestReportPlugin(config=config, reporter=reporter)
     config.pluginmanager.register(api_test_report_plugin, "api_test_report_plugin")
 
-    # Only report failed collects and test runs from the main node
+    # Only report test runs and display summary from the main node
     if not hasattr(config, "workerinput"):
-        api_collect_plugin = TestCollectReportPlugin(reporter)
-        config.pluginmanager.register(api_collect_plugin, "api_collect_plugin")
         api_test_run_plugin = TestRunReportPlugin(reporter)
         config.pluginmanager.register(api_test_run_plugin, "api_test_run_plugin")
         config.pluginmanager.register(ReportSummaryPlugin(), "summary_plugin")
@@ -78,13 +77,8 @@ class TestReportPlugin:
     def __init__(self, config: "Config", reporter: TestReporter) -> None:
         self.config = config
         self.reporter = reporter
-        self.outcomes_by_report_id: Dict[int, str] = {}
+        self.prev_outcome: str = ""
         self.report_stats: List[TestReportStats] = []
-
-        # Report failures correctly in case of xdist -x; borrowed from allure
-        self._magicaldoublereport = hasattr(
-            self.config, "workerinput"
-        ) and self.config.getvalue("maxfail")
 
     def report_stat(self, node_id: str, test_id: int, event: TestReportEvent) -> None:
         self.report_stats.append(
@@ -119,21 +113,23 @@ class TestReportPlugin:
         report: "TestReport" = (yield).get_result()
 
         report_test_id = self._get_report_test_id(item)
-        prev_outcome = self.outcomes_by_report_id.get(report_test_id)
-        if prev_outcome and prev_outcome != "passed":
-            # Prevent reporting on successfull teardowns for skipped and failed tests
-            return
-
-        outcome = self.outcomes_by_report_id[report_test_id] = report.outcome
-        if outcome == "passed" and report.when != "teardown":
-            # Report test success only when all stages successful
-            return
-
-        status = outcome.upper()
-        self.reporter.report_test_finish(test_id=report_test_id, test_status=status)
-        self.report_stat(
-            node_id=item.nodeid, test_id=report_test_id, event="test_finish"
-        )
+        if report.when == "call":
+            self.prev_outcome = report.outcome
+        elif report.when == "setup":
+            if report.failed:
+                self.prev_outcome = "error"
+            else:
+                self.prev_outcome = report.outcome
+        elif report.when == "teardown":
+            if not report.passed:
+                if self.prev_outcome != "failed":
+                    status = "error".upper()
+            else:
+                status = self.prev_outcome.upper()
+            self.reporter.report_test_finish(test_id=report_test_id, test_status=status)
+            self.report_stat(
+                node_id=item.nodeid, test_id=report_test_id, event="test_finish"
+            )
 
     def pytest_testnodedown(self, node: "Node") -> None:
         report_stats = node.workeroutput["report_stats"]
@@ -145,24 +141,6 @@ class TestReportPlugin:
         if hasattr(self.config, "workerinput"):
             self.config.workeroutput["report_stats"] = self.report_stats
         self.store_stats()
-
-
-class TestCollectReportPlugin:
-    def __init__(self, reporter: TestReporter) -> None:
-        self.reporter = reporter
-
-    @pytest.mark.hookwrapper
-    def pytest_collectreport(
-        self, report: "CollectReport"
-    ) -> Generator[None, None, None]:
-        yield
-        if report.failed:
-            # Retrieve report test id and report failure immediately
-            reporter = self.reporter
-            report_test_id = reporter.report_test_start(test_name=report.nodeid)
-            reporter.report_test_finish(
-                test_id=report_test_id, test_status=report.outcome.upper()
-            )
 
 
 class TestRunReportPlugin:

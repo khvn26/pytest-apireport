@@ -1,4 +1,5 @@
 # pytest-apireport
+![](coverage.svg)
 ## Installation
 Clone this repository, create a venv, install with
 ```bash

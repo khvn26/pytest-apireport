@@ -17,6 +17,12 @@ setup(
         "requests",
     ],
     extras_require={
-        "test": ["pytest-httpserver", "hypothesis", "pytest-xdist", "werkzeug"],
+        "test": [
+            "pytest-httpserver",
+            "hypothesis",
+            "pytest-xdist",
+            "pytest-cov",
+            "werkzeug",
+        ],
     },
 )

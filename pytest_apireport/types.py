@@ -5,16 +5,16 @@ class TestReporter(Protocol):
     """Methods defined in order of execution."""
 
     def report_test_run_start(self) -> int:
-        pass
+        pass  # pragma: no cover
 
     def report_test_start(self, test_name: str) -> int:
-        pass
+        pass  # pragma: no cover
 
     def report_test_finish(self, test_id: int, test_status: str) -> None:
-        pass
+        pass  # pragma: no cover
 
     def report_test_run_finish(self, run_id: int) -> None:
-        pass
+        pass  # pragma: no cover
 
 
 TestReportEvent = Literal["test_start", "test_finish"]
