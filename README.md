@@ -24,3 +24,5 @@ What could be done with more time:
 * Better API request error reporting
 * API client generation from OpenAPI schema
 * Stress/load testing
+* CI pipeline with coverage
+* More configuration options (pytest.ini, environment variables)
