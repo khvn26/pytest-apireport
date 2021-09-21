@@ -71,7 +71,7 @@ def testmodule(testdir) -> Path:
 @pytest.fixture
 def expected_tests_ids_and_statuses(
     request,
-) -> Dict[str, Tuple[int, Literal["PASSED", "SKIPPED", "FAILED"]]]:
+) -> Dict[str, Tuple[int, Literal["PASSED", "SKIPPED", "FAILED", "ERROR"]]]:
     module_name = request.node.originalname
     return {
         f"{module_name}.py::test_examples[2-2]": (1, "PASSED"),

@@ -148,7 +148,7 @@ class TestRunReportPlugin:
         self.reporter = reporter
         self.report_stats: List[TestRunReportStats] = []
 
-    def report_stat(self, run_id: str, event: TestRunReportEvent) -> None:
+    def report_stat(self, run_id: int, event: TestRunReportEvent) -> None:
         self.report_stats.append(
             {
                 "timestamp": datetime.now().isoformat(),
@@ -164,12 +164,12 @@ class TestRunReportPlugin:
     def pytest_runtestloop(self, session: "Session") -> Generator[None, None, None]:
         reporter = self.reporter
         run_id = reporter.report_test_run_start()
-        self.report_stat(run_id=run_id, event="test_run_started")
+        self.report_stat(run_id=run_id, event="test_run_start")
 
         yield
 
         reporter.report_test_run_finish(run_id=run_id)
-        self.report_stat(run_id=run_id, event="test_run_finished")
+        self.report_stat(run_id=run_id, event="test_run_finish")
         self.store_stats(config=session.config)
 
 
